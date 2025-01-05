@@ -9,7 +9,7 @@ public class Constants {
 
     final public static int taxiAmount = 10;
 
-    final public static int orderFrequency = 5;
+    final public static int orderFrequency = 20;
 
     final public static int taxiSpeedMetersSeconds = 20;
     //final public static int taxiSpeedKmHour = 72;

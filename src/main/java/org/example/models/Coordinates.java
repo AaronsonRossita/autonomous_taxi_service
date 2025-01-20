@@ -1,5 +1,7 @@
 package org.example.models;
 
+import java.util.Objects;
+
 public class Coordinates {
 
     private int xLocation;
@@ -24,6 +26,23 @@ public class Coordinates {
 
     public void setYLocation(int yLocation) {
         this.yLocation = yLocation;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+        Coordinates other = (Coordinates) obj;
+        return xLocation == other.xLocation && yLocation == other.yLocation;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(xLocation, yLocation);
     }
 
     @Override

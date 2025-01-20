@@ -32,7 +32,7 @@ public class TaxiHandler {
 
     public void initializeTaxis(int numTaxis) {
         for (int i = 0; i < numTaxis; i++) {
-            taxis.add(new Taxi());
+            taxis.add(new Taxi(i));
         }
         System.out.println("Initialized " + numTaxis + " taxis.");
     }
@@ -76,56 +76,83 @@ public class TaxiHandler {
     }
 
     public void updateTaxiLocations(int elapsedTime) {
+        System.out.println("=== Start of Taxi Update Cycle ===");
         for (Taxi taxi : taxis) {
+            System.out.println("Processing Taxi " + taxi.getId() + " - Current State: " + taxi);
+
             if (taxi.isBusy() && taxi.getCurrentOrder() != null) {
                 Coordinates current = taxi.getTaxiCoordinates();
                 Order order = taxi.getCurrentOrder();
-                Coordinates target;
 
-                if (!current.equals(order.getOrderInitialCoordinates())) {
-                    target = order.getOrderInitialCoordinates();
-                } else {
-                    target = order.getOrderDestinationCoordinates();
+                Coordinates target = taxi.isHeadingToPickup()
+                        ? order.getOrderInitialCoordinates()
+                        : order.getOrderDestinationCoordinates();
+
+                System.out.println("Step: Determine target location");
+                System.out.println("Taxi " + taxi.getId() + " is heading to " +
+                        (taxi.isHeadingToPickup() ? "pickup" : "destination") + " at: " + target);
+
+                int maxDistance = Constants.taxiSpeedMetersSeconds * elapsedTime;
+                System.out.println("Step: Calculate maximum distance");
+                System.out.println("Taxi " + taxi.getId() + " can move up to " + maxDistance + " meters this cycle.");
+
+                if (current.getXLocation() != target.getXLocation() && maxDistance > 0) {
+                    int deltaX = target.getXLocation() - current.getXLocation();
+                    int moveX = Math.min(maxDistance, Math.abs(deltaX));
+                    current.setXLocation(current.getXLocation() + (deltaX > 0 ? moveX : -moveX));
+                    maxDistance -= moveX;
+                    System.out.println("Taxi " + taxi.getId() + " moved " + moveX + " meters along X-axis to: " + current);
                 }
 
-                int deltaX = target.getXLocation() - current.getXLocation();
-                int deltaY = target.getYLocation() - current.getYLocation();
-
-                int maxMovement = Constants.taxiSpeedMetersSeconds * elapsedTime;
-                int moveX = Math.min(Math.abs(deltaX), maxMovement);
-                int moveY = 0;
-
-                if (moveX < maxMovement) {
-                    moveY = Math.min(Math.abs(deltaY), maxMovement - moveX);
+                if (current.getYLocation() != target.getYLocation() && maxDistance > 0) {
+                    int deltaY = target.getYLocation() - current.getYLocation();
+                    int moveY = Math.min(maxDistance, Math.abs(deltaY));
+                    current.setYLocation(current.getYLocation() + (deltaY > 0 ? moveY : -moveY));
+                    //maxDistance -= moveY;
+                    System.out.println("Taxi " + taxi.getId() + " moved " + moveY + " meters along Y-axis to: " + current);
                 }
 
-                current.setXLocation(current.getXLocation() + (deltaX > 0 ? moveX : -moveX));
-                current.setYLocation(current.getYLocation() + (deltaY > 0 ? moveY : -moveY));
+                System.out.println("Step: Check if taxi reached target location");
+                if (current.equals(order.getOrderInitialCoordinates()) && taxi.isHeadingToPickup()) {
+                    System.out.println("Taxi " + taxi.getId() + " reached the pickup location.");
+                    taxi.setHeadingToPickup(false);
+                    System.out.println("Taxi " + taxi.getId() + " is now heading to destination: " + order.getOrderDestinationCoordinates());
+                } else if (current.equals(order.getOrderDestinationCoordinates()) && !taxi.isHeadingToPickup()) {
+                    System.out.println("Taxi " + taxi.getId() + " reached the destination.");
+                    taxi.setBusy(false);
+                    taxi.setCurrentOrder(null);
+                    System.out.println("Taxi " + taxi.getId() + " is now idle.");
 
-                if (current.equals(target)) {
-                    if (target.equals(order.getOrderDestinationCoordinates())) {
-                        taxi.setBusy(false);
-                        taxi.setCurrentOrder(null);
-                        System.out.println("Taxi " + taxi + " completed an order.");
+                    if (!orderQueue.isEmpty()) {
+                        Order nextOrder = orderQueue.poll();
+                        assignOrderToTaxi(taxi, nextOrder);
+                        System.out.println("Taxi " + taxi.getId() + " assigned to new order: " + nextOrder);
+                    } else {
+                        System.out.println("Taxi " + taxi.getId() + " has no pending orders.");
                     }
+                } else {
+                    System.out.println("Taxi " + taxi.getId() + " is still en route to target location.");
+                }
+            } else {
+                if (taxi.isBusy()) {
+                    System.out.println("Taxi " + taxi.getId() + " has no current order but is marked as busy.");
+                } else {
+                    System.out.println("Taxi " + taxi.getId() + " is idle and waiting for an order.");
                 }
             }
+            System.out.println("=== End of processing for Taxi " + taxi.getId() + " ===");
         }
+
+        System.out.println("=== End of Taxi Update Cycle ===");
+        System.out.println("Processing Unassigned Orders...");
+        processOrders();
+        System.out.println("=== End of Unassigned Orders Processing ===");
     }
 
     public void assignOrderToTaxi(Taxi taxi, Order order) {
         taxi.setCurrentOrder(order);
         taxi.setBusy(true);
-    }
-
-    public int calculateBusyTime(Coordinates taxiLocation, Coordinates startLocation, Coordinates endLocation) {
-        int distanceToPickup = Math.abs(startLocation.getXLocation() - taxiLocation.getXLocation()) +
-                Math.abs(startLocation.getYLocation() - taxiLocation.getYLocation());
-        int distanceToDestination = Math.abs(endLocation.getXLocation() - startLocation.getXLocation()) +
-                Math.abs(endLocation.getYLocation() - startLocation.getYLocation());
-        int totalDistance = distanceToPickup + distanceToDestination;
-
-        return (int) Math.ceil(totalDistance / Constants.taxiSpeedMetersSeconds);
+        taxi.setHeadingToPickup(true);
     }
 
     public void startSimulation() {
@@ -139,8 +166,6 @@ public class TaxiHandler {
                     addNewOrder();
 
                     updateTaxiLocations(Constants.orderFrequency);
-
-                    processOrders();
 
                     printStatus();
 
